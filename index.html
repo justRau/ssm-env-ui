@@ -13,11 +13,58 @@
 <body class="bg-gray-100 min-h-screen">
     <div x-data="ssmEditor()" x-cloak class="container mx-auto px-4 py-4 max-w-full">
         <!-- Compact Header -->
-        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
-            <div class="flex items-center justify-between gap-6">
+        <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                                            <div class="flex items-center justify-between gap-6">
                 <div class="flex-shrink-0">
                     <h1 class="text-2xl font-bold text-gray-900">SSM Parameter Editor</h1>
-                    <p class="text-sm text-gray-600">Manage AWS Systems Manager Parameter Store variables</p>
+                    <div class="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Local storage: <span x-text="storageUsage"></span></span>
+                        <button
+                            @click="showDeletedHistoryPopover = !showDeletedHistoryPopover"
+                            class="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200 relative"
+                            :class="deletedHistory.length > 0 ? 'text-red-600' : 'text-gray-400'"
+                        >
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Deleted (<span x-text="deletedHistory.length"></span>)</span>
+
+                                                                                                                <!-- Deleted History Popover -->
+                            <div x-show="showDeletedHistoryPopover"
+                                 @click.away="showDeletedHistoryPopover = false"
+                                 @click.stop
+                                 x-transition
+                                 class="absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto cursor-text">
+                                <div class="p-3 border-b border-gray-200">
+                                    <h4 class="font-medium text-gray-900">Deleted Parameters</h4>
+                                </div>
+                                <div class="p-2">
+                                                                            <template x-for="item in deletedHistory.slice().reverse()" :key="item.timestamp">
+                                            <div class="p-2 border-b border-gray-100 last:border-b-0">
+                                                <div class="flex justify-between items-start gap-2">
+                                                    <div class="flex-1">
+                                                        <div class="font-mono text-sm text-gray-900 select-text" x-text="item.fullName"></div>
+                                                        <div class="text-xs text-gray-500 mt-1 select-text" x-text="formatTimestamp(item.timestamp)"></div>
+                                                    </div>
+                                                    <span class="px-1 py-0.5 text-xs border rounded select-text"
+                                                          :class="{
+                                                              'border-blue-400 text-blue-400': item.type === 'String',
+                                                              'border-green-400 text-green-400': item.type === 'StringList',
+                                                              'border-red-400 text-red-400': item.type === 'SecureString'
+                                                          }"
+                                                          x-text="item.type"></span>
+                                                </div>
+                                                <div class="text-xs text-gray-600 mt-1 font-mono bg-gray-50 p-1 rounded select-text" x-text="item.value"></div>
+                                            </div>
+                                        </template>
+                                    <div x-show="deletedHistory.length === 0" class="p-4 text-center text-gray-500 text-sm">
+                                        No deleted parameters
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
                 </div>
                 <div class="flex items-center gap-4">
                     <div class="flex-1 min-w-80">
@@ -191,17 +238,61 @@
                                         </td>
                                         <td class="px-4 py-2">
                                             <div class="flex items-center gap-1">
-                                                <input
-                                                    type="text"
-                                                    x-model="param.editValue"
-                                                    :readonly="!param.editing"
-                                                    @click="!param.editing && startEdit(param, prefixIndex)"
-                                                    @keyup.enter="param.editing && saveParameter(param, prefixIndex, paramIndex)"
-                                                    @keyup.escape="param.editing && cancelEdit(param)"
-                                                    class="w-72 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent font-mono transition-colors"
-                                                    :class="param.editing ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 hover:bg-gray-200 cursor-pointer'"
-                                                    :placeholder="param.editing ? '' : 'Click to edit'"
-                                                >
+                                                <div class="relative">
+                                                    <input
+                                                        type="text"
+                                                        x-model="param.editValue"
+                                                        :readonly="!param.editing"
+                                                        @click="!param.editing && startEdit(param, prefixIndex)"
+                                                        @keyup.enter="param.editing && saveParameter(param, prefixIndex, paramIndex)"
+                                                        @keyup.escape="param.editing && cancelEdit(param)"
+                                                        class="w-72 px-2 py-1 pr-8 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent font-mono transition-colors"
+                                                        :class="param.editing ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 hover:bg-gray-200 cursor-pointer'"
+                                                        :placeholder="param.editing ? '' : 'Click to edit'"
+                                                    >
+                                                    <!-- History Icon - only show when editing -->
+                                                    <button
+                                                        x-show="param.editing"
+                                                        @click.stop="showHistoryPopover = showHistoryPopover === param.fullName ? null : param.fullName"
+                                                        class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                        :class="getParameterHistory(param.fullName).length > 0 ? 'text-blue-500 hover:text-blue-700' : ''"
+                                                    >
+                                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                                                        </svg>
+                                                    </button>
+
+                                                                                                                                                            <!-- History Popover -->
+                                                    <div x-show="showHistoryPopover === param.fullName"
+                                                         @click.away="showHistoryPopover = null"
+                                                         @click.stop
+                                                         x-transition
+                                                         class="absolute top-full right-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                                                        <div class="p-3 border-b border-gray-200">
+                                                            <h4 class="font-medium text-gray-900">History for <span class="font-mono text-sm" x-text="param.name"></span></h4>
+                                                        </div>
+                                                        <div class="p-2">
+                                                                                                                         <template x-for="historyItem in getParameterHistory(param.fullName)" :key="historyItem.timestamp">
+                                                                 <div class="p-2 border-b border-gray-100 last:border-b-0">
+                                                                     <div class="text-xs text-gray-500 mb-1 select-text" x-text="formatTimestamp(historyItem.timestamp)"></div>
+                                                                     <div class="space-y-1">
+                                                                         <div class="text-xs">
+                                                                             <span class="text-gray-600">From:</span>
+                                                                             <span class="font-mono bg-red-50 px-1 rounded text-red-700 select-text" x-text="historyItem.oldValue"></span>
+                                                                         </div>
+                                                                         <div class="text-xs">
+                                                                             <span class="text-gray-600">To:</span>
+                                                                             <span class="font-mono bg-green-50 px-1 rounded text-green-700 select-text" x-text="historyItem.newValue"></span>
+                                                                         </div>
+                                                                     </div>
+                                                                 </div>
+                                                             </template>
+                                                            <div x-show="getParameterHistory(param.fullName).length === 0" class="p-4 text-center text-gray-500 text-sm">
+                                                                No history available
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                                 <button
                                                     @click="param.editing ? saveParameter(param, prefixIndex, paramIndex) : deleteParameter(param, prefixIndex, paramIndex)"
                                                     :disabled="param.saving"
@@ -247,9 +338,16 @@
                     dragIndex: null,
                     dropIndex: null
                 },
+                history: [],
+                deletedHistory: [],
+                storageUsage: '0 KB',
+                showHistoryPopover: null,
+                showDeletedHistoryPopover: false,
 
                 init() {
                     this.loadFromStorage();
+                    this.loadHistory();
+                    this.calculateStorageUsage();
                 },
 
                 // localStorage management
@@ -291,6 +389,83 @@
                             console.error('Failed to load from storage:', e);
                         }
                     }
+                },
+
+                loadHistory() {
+                    const history = localStorage.getItem('ssmHistory');
+                    const deletedHistory = localStorage.getItem('ssmDeletedHistory');
+
+                    if (history) {
+                        try {
+                            this.history = JSON.parse(history);
+                        } catch (e) {
+                            console.error('Failed to load history:', e);
+                            this.history = [];
+                        }
+                    }
+
+                    if (deletedHistory) {
+                        try {
+                            this.deletedHistory = JSON.parse(deletedHistory);
+                        } catch (e) {
+                            console.error('Failed to load deleted history:', e);
+                            this.deletedHistory = [];
+                        }
+                    }
+                },
+
+                saveHistory() {
+                    localStorage.setItem('ssmHistory', JSON.stringify(this.history));
+                    localStorage.setItem('ssmDeletedHistory', JSON.stringify(this.deletedHistory));
+                    this.calculateStorageUsage();
+                },
+
+                addToHistory(fullName, oldValue, newValue, type) {
+                    this.history.push({
+                        fullName,
+                        oldValue,
+                        newValue,
+                        type,
+                        timestamp: new Date().toISOString()
+                    });
+                    this.saveHistory();
+                },
+
+                addToDeletedHistory(fullName, value, type) {
+                    this.deletedHistory.push({
+                        fullName,
+                        value,
+                        type,
+                        timestamp: new Date().toISOString()
+                    });
+                    this.saveHistory();
+                },
+
+                getParameterHistory(fullName) {
+                    return this.history
+                        .filter(h => h.fullName === fullName)
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                },
+
+                calculateStorageUsage() {
+                    let totalSize = 0;
+                    for (let key in localStorage) {
+                        if (localStorage.hasOwnProperty(key) && key.startsWith('ssm')) {
+                            totalSize += localStorage[key].length;
+                        }
+                    }
+
+                    if (totalSize < 1024) {
+                        this.storageUsage = totalSize + ' B';
+                    } else if (totalSize < 1024 * 1024) {
+                        this.storageUsage = Math.round(totalSize / 1024) + ' KB';
+                    } else {
+                        this.storageUsage = Math.round(totalSize / (1024 * 1024)) + ' MB';
+                    }
+                },
+
+                formatTimestamp(timestamp) {
+                    return new Date(timestamp).toLocaleString();
                 },
 
                 async addPrefix() {
@@ -456,7 +631,12 @@
 
                         const data = await response.json();
 
-                        if (data.success) {
+                                                if (data.success) {
+                            // Only add to history if value actually changed
+                            if (param.value !== param.editValue) {
+                                this.addToHistory(param.fullName, param.value, param.editValue, param.type);
+                            }
+
                             param.value = param.editValue;
                             param.editing = false;
                             this.saveToStorage();
@@ -502,6 +682,9 @@
                         const data = await response.json();
 
                         if (data.success) {
+                            // Add to deleted history before removing
+                            this.addToDeletedHistory(param.fullName, param.value, param.type);
+
                             // Remove parameter from the local array
                             const prefixInfo = this.prefixData[prefixIndex];
                             prefixInfo.parameters.splice(paramIndex, 1);
