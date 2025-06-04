@@ -8,7 +8,7 @@ This tool is heavily inspired by [Clasyc/ssm-env](https://github.com/Clasyc/ssm-
 
 ## Requirements
 
-- PHP 8.3 + Composer or Docker
+- `PHP 8.3 + Composer` or `Docker`
 - AWS credentials
 
 ## Setup
