@@ -2,6 +2,10 @@
 
 This is the PHP backend for the SSM Parameter Editor, converted from the original Go CLI tool.
 
+## Inspiration
+
+This tool is heavily inspired by [ssm-env](https://github.com/Clasyc/ssm-env) - a fantastic CLI tool for handling AWS Systems Manager Parameter Store variables. We've adapted its core functionality to create a web-based interface with a PHP backend.
+
 ## Requirements
 
 - PHP 8.3 or higher
@@ -21,10 +25,29 @@ This is the PHP backend for the SSM Parameter Editor, converted from the origina
    - Or use IAM roles if running on AWS
 
 3. **Start the development server:**
+
+   **Option A: Built-in PHP server:**
    ```bash
    cd api
    php -S localhost:8080
    ```
+
+   **Option B: Laravel Valet (recommended for macOS):**
+   ```bash
+   # Install Valet if not already installed
+   composer global require laravel/valet
+   valet install
+
+   # Link the project directory
+   valet link ssm-env
+
+   # Your API will be available at http://ssm-env.test/api/
+   ```
+
+   **Option C: Other local development tools:**
+   - XAMPP, MAMP, or similar with document root pointing to project directory
+   - Docker with PHP-FPM and Nginx/Apache
+   - Any other local web server setup
 
 4. **Test the setup:**
    ```bash
