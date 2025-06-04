@@ -104,7 +104,7 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold text-gray-800" x-text="prefixInfo.prefix"></h3>
+                                <h3 class="text-lg font-semibold text-gray-800 select-text" x-text="prefixInfo.prefix"></h3>
                                 <p class="text-sm text-gray-500">
                                     <span x-text="prefixInfo.parameters.length"></span> parameters
                                 </p>
@@ -174,22 +174,19 @@
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200 max-h-96 overflow-y-auto">
                                 <template x-for="(param, paramIndex) in prefixInfo.parameters" :key="param.fullName">
-                                    <tr class="hover:bg-gray-50">
+                                    <tr class="hover:bg-gray-50 group">
                                         <td class="px-4 py-2">
-                                            <div class="flex flex-col">
-                                                <div class="flex items-center gap-1 mb-1">
-                                                    <span class="text-sm font-medium text-gray-900 truncate" x-text="param.name" :title="param.name"></span>
-                                                    <span
-                                                        class="px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0"
-                                                        :class="{
-                                                            'bg-blue-100 text-blue-800': param.type === 'String',
-                                                            'bg-green-100 text-green-800': param.type === 'StringList',
-                                                            'bg-red-100 text-red-800': param.type === 'SecureString'
-                                                        }"
-                                                        x-text="param.type"
-                                                    ></span>
-                                                </div>
-                                                <span class="text-xs text-gray-400 font-mono truncate" x-text="prefixInfo.prefix" :title="prefixInfo.prefix"></span>
+                                            <div class="flex items-center gap-1">
+                                                <span class="text-sm font-medium text-gray-900 truncate select-text" x-text="param.name" :title="param.name"></span>
+                                                <span
+                                                    class="px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0 border"
+                                                    :class="{
+                                                        'border-blue-400 text-blue-400': param.type === 'String',
+                                                        'border-green-400 text-green-400': param.type === 'StringList',
+                                                        'border-red-400 text-red-400': param.type === 'SecureString'
+                                                    }"
+                                                    x-text="param.type"
+                                                ></span>
                                             </div>
                                         </td>
                                         <td class="px-4 py-2">
@@ -206,12 +203,14 @@
                                                     :placeholder="param.editing ? '' : 'Click to edit'"
                                                 >
                                                 <button
-                                                    @click="saveParameter(param, prefixIndex, paramIndex)"
+                                                    @click="param.editing ? saveParameter(param, prefixIndex, paramIndex) : deleteParameter(param, prefixIndex, paramIndex)"
                                                     :disabled="param.saving"
-                                                    class="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:bg-gray-400 flex-shrink-0"
-                                                    :class="param.editing ? '' : 'invisible'"
+                                                    class="px-2 py-1 text-white text-xs rounded flex-shrink-0 transition-opacity"
+                                                    :class="[
+                                                        param.editing ? 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400 opacity-100' : 'bg-red-600 hover:bg-red-700 opacity-0 group-hover:opacity-100'
+                                                    ]"
                                                 >
-                                                    <span x-text="param.saving ? '...' : 'Save'"></span>
+                                                    <span x-text="param.editing ? (param.saving ? '...' : 'Save') : 'Delete'"></span>
                                                 </button>
                                             </div>
                                         </td>
@@ -465,6 +464,53 @@
                             setTimeout(() => this.successMessage = '', 3000);
                         } else {
                             this.error = data.error || 'Failed to update parameter';
+                        }
+                    } catch (err) {
+                        this.error = 'Network error: ' + err.message;
+                    } finally {
+                        param.saving = false;
+                    }
+                },
+
+                async deleteParameter(param, prefixIndex, paramIndex) {
+                    // First confirmation
+                    const firstConfirm = confirm(`Are you sure you want to delete "${param.name}"?`);
+                    if (!firstConfirm) {
+                        return;
+                    }
+
+                    // Second confirmation with warning
+                    const secondConfirm = confirm(`⚠️ FINAL WARNING ⚠️\n\nDeleting "${param.name}" is PERMANENT.\n\nClick OK to confirm deletion.`);
+                    if (!secondConfirm) {
+                        return;
+                    }
+
+                    param.saving = true;
+                    this.error = '';
+
+                    try {
+                        const response = await fetch('/api/deleteParameter.php', {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                fullName: param.fullName
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            // Remove parameter from the local array
+                            const prefixInfo = this.prefixData[prefixIndex];
+                            prefixInfo.parameters.splice(paramIndex, 1);
+                            this.saveToStorage();
+
+                            this.successMessage = 'Parameter deleted successfully';
+                            setTimeout(() => this.successMessage = '', 3000);
+                        } else {
+                            this.error = data.error || 'Failed to delete parameter';
                         }
                     } catch (err) {
                         this.error = 'Network error: ' + err.message;
