@@ -2,6 +2,8 @@
 
 A web-based interface for managing AWS Systems Manager Parameter Store variables with an intuitive UI for creating, updating, and deleting parameters.
 
+![Demo Screenshot](demo.png)
+
 ## Inspiration
 
 This tool is heavily inspired by [Clasyc/ssm-env](https://github.com/Clasyc/ssm-env) - a fantastic CLI tool for handling AWS Systems Manager Parameter Store variables. We've adapted its core functionality to create a web-based interface.

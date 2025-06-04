@@ -29,6 +29,17 @@
                                 <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
                             </svg>
                             <span>Deleted (<span x-text="deletedHistory.length"></span>)</span>
+                        </button>
+                        <button
+                            x-show="showFakeValuesButton"
+                            @click="generateFakeValues()"
+                            class="flex items-center gap-1 px-2 py-1 text-xs bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                        >
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                            </svg>
+                            <span>Fake Values</span>
+                        </button>
 
                                                                                                                 <!-- Deleted History Popover -->
                             <div x-show="showDeletedHistoryPopover"
@@ -343,11 +354,32 @@
                 storageUsage: '0 KB',
                 showHistoryPopover: null,
                 showDeletedHistoryPopover: false,
+                showFakeValuesButton: false,
+                fKeyPresses: [],
 
                 init() {
                     this.loadFromStorage();
                     this.loadHistory();
                     this.calculateStorageUsage();
+                    this.setupKeyListener();
+                },
+
+                setupKeyListener() {
+                    document.addEventListener('keydown', (event) => {
+                        if (event.key.toLowerCase() === 'f') {
+                            const now = Date.now();
+                            this.fKeyPresses.push(now);
+
+                            // Remove presses older than 5 seconds
+                            this.fKeyPresses = this.fKeyPresses.filter(time => now - time <= 5000);
+
+                            // Check if we have 5 presses within 5 seconds
+                            if (this.fKeyPresses.length >= 5) {
+                                this.showFakeValuesButton = true;
+                                this.fKeyPresses = []; // Reset counter
+                            }
+                        }
+                    });
                 },
 
                 // localStorage management
@@ -466,6 +498,77 @@
 
                 formatTimestamp(timestamp) {
                     return new Date(timestamp).toLocaleString();
+                },
+
+                                generateFakeValues() {
+                    // Generate fake prefixes with demo parameters
+                    const fakePrefixes = [
+                        {
+                            prefix: '/myapp/prod/',
+                            parameters: [
+                                { name: 'database_url', fullName: '/myapp/prod/database_url', value: 'postgresql://user:password@db.example.com:5432/myapp_prod', type: 'SecureString' },
+                                { name: 'api_key', fullName: '/myapp/prod/api_key', value: 'sk-1234567890abcdef1234567890abcdef12345678', type: 'SecureString' },
+                                { name: 'redis_url', fullName: '/myapp/prod/redis_url', value: 'redis://redis-cluster.abc123.cache.amazonaws.com:6379', type: 'String' },
+                                { name: 'max_connections', fullName: '/myapp/prod/max_connections', value: '100', type: 'String' },
+                                { name: 'debug_mode', fullName: '/myapp/prod/debug_mode', value: 'false', type: 'String' },
+                                { name: 'log_level', fullName: '/myapp/prod/log_level', value: 'INFO', type: 'String' }
+                            ]
+                        },
+                        {
+                            prefix: '/myapp/staging/',
+                            parameters: [
+                                { name: 'database_url', fullName: '/myapp/staging/database_url', value: 'postgresql://user:password@staging-db.example.com:5432/myapp_staging', type: 'SecureString' },
+                                { name: 'api_key', fullName: '/myapp/staging/api_key', value: 'sk-staging-abcdef1234567890abcdef1234567890', type: 'SecureString' },
+                                { name: 'debug_mode', fullName: '/myapp/staging/debug_mode', value: 'true', type: 'String' },
+                                { name: 'log_level', fullName: '/myapp/staging/log_level', value: 'DEBUG', type: 'String' },
+                                { name: 'feature_flags', fullName: '/myapp/staging/feature_flags', value: 'new_ui,beta_features,experimental', type: 'StringList' }
+                            ]
+                        },
+                        {
+                            prefix: '/shared/config/',
+                            parameters: [
+                                { name: 'smtp_host', fullName: '/shared/config/smtp_host', value: 'smtp.mailgun.org', type: 'String' },
+                                { name: 'smtp_port', fullName: '/shared/config/smtp_port', value: '587', type: 'String' },
+                                { name: 'from_email', fullName: '/shared/config/from_email', value: 'noreply@myapp.com', type: 'String' },
+                                { name: 'admin_email', fullName: '/shared/config/admin_email', value: 'admin@myapp.com', type: 'String' },
+                                { name: 'support_email', fullName: '/shared/config/support_email', value: 'support@myapp.com', type: 'String' },
+                                { name: 'encryption_key', fullName: '/shared/config/encryption_key', value: 'aes256:1234567890abcdef1234567890abcdef12345678901234567890abcdef12345678', type: 'SecureString' }
+                            ]
+                        },
+                        {
+                            prefix: '/aws/services/',
+                            parameters: [
+                                { name: 's3_bucket', fullName: '/aws/services/s3_bucket', value: 'myapp-prod-assets-us-east-1', type: 'String' },
+                                { name: 's3_access_key', fullName: '/aws/services/s3_access_key', value: 'AKIA1234567890ABCDEF12', type: 'SecureString' },
+                                { name: 's3_secret_key', fullName: '/aws/services/s3_secret_key', value: '1234567890abcdef1234567890abcdef1234567890', type: 'SecureString' },
+                                { name: 'sqs_queue_url', fullName: '/aws/services/sqs_queue_url', value: 'https://sqs.us-east-1.amazonaws.com/123456789012/myapp-prod-queue', type: 'String' },
+                                { name: 'region', fullName: '/aws/services/region', value: 'us-east-1', type: 'String' }
+                            ]
+                        }
+                    ];
+
+                    // Clear existing data and add fake prefixes
+                    this.prefixData = fakePrefixes.map(fakePrefix => ({
+                        prefix: fakePrefix.prefix,
+                        parameters: fakePrefix.parameters.map(param => ({
+                            ...param,
+                            editing: false,
+                            editValue: param.value,
+                            saving: false
+                        })),
+                        showCreateForm: false,
+                        creating: false,
+                        newParameter: {
+                            name: '',
+                            value: '',
+                            type: 'String'
+                        }
+                    }));
+
+                    // Save the fake data
+                    this.saveToStorage();
+                    this.successMessage = 'Generated demo data with fake prefixes and parameters';
+                    setTimeout(() => this.successMessage = '', 3000);
                 },
 
                 async addPrefix() {
