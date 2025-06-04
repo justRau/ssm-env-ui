@@ -1,30 +1,41 @@
-# SSM Parameter Editor - PHP Backend
+# SSM Parameter Editor UI
 
-This is the PHP backend for the SSM Parameter Editor, converted from the original Go CLI tool.
+A web-based interface for managing AWS Systems Manager Parameter Store variables with an intuitive UI for creating, updating, and deleting parameters.
 
 ## Inspiration
 
-This tool is heavily inspired by [ssm-env](https://github.com/Clasyc/ssm-env) - a fantastic CLI tool for handling AWS Systems Manager Parameter Store variables. We've adapted its core functionality to create a web-based interface with a PHP backend.
+This tool is heavily inspired by [Clasyc/ssm-env](https://github.com/Clasyc/ssm-env) - a fantastic CLI tool for handling AWS Systems Manager Parameter Store variables. We've adapted its core functionality to create a web-based interface.
 
 ## Requirements
 
-- PHP 8.3 or higher
-- Composer
-- AWS credentials configured
+- PHP 8.3 + Composer or Docker
+- AWS credentials
 
 ## Setup
+
+### Docker
+
+Build and run the container with your AWS credentials:
+
+```bash
+docker build -t ssm-env .
+docker run -p 8080:80 \
+  -e AWS_ACCESS_KEY_ID=your_access_key \
+  -e AWS_SECRET_ACCESS_KEY=your_secret_key \
+  -e AWS_DEFAULT_REGION=us-east-1 \
+  ssm-env
+```
+
+The application will be available at `http://localhost:8080`
+
+### Local development server
 
 1. **Install dependencies:**
    ```bash
    composer install
    ```
 
-2. **Configure AWS credentials** (same as the Go tool):
-   - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`
-   - Or use `~/.aws/credentials` file
-   - Or use IAM roles if running on AWS
-
-3. **Start the development server:**
+2. **Start the development server:**
 
    **Option A: Built-in PHP server:**
    ```bash
@@ -46,13 +57,32 @@ This tool is heavily inspired by [ssm-env](https://github.com/Clasyc/ssm-env) - 
 
    **Option C: Other local development tools:**
    - XAMPP, MAMP, or similar with document root pointing to project directory
-   - Docker with PHP-FPM and Nginx/Apache
    - Any other local web server setup
 
-4. **Test the setup:**
+3. **Test the setup:**
    ```bash
    curl "http://ssm-env.test/api/test.php"
    ```
+
+#### Authentication
+
+Configure AWS credentials using one of these methods:
+
+- **Environment variables:**
+  ```bash
+  export AWS_ACCESS_KEY_ID=your_access_key
+  export AWS_SECRET_ACCESS_KEY=your_secret_key
+  export AWS_DEFAULT_REGION=us-east-1
+  ```
+
+- **AWS credentials file:**
+  ```bash
+  # Create ~/.aws/credentials file
+  [default]
+  aws_access_key_id = your_access_key
+  aws_secret_access_key = your_secret_key
+  region = us-east-1
+  ```
 
 ## API Endpoints
 
@@ -61,7 +91,7 @@ Health check endpoint to verify the backend is working.
 
 **Example:**
 ```bash
-curl "http://ssm-env.test/api/test.php"
+curl "http://localhost:8080/api/test.php"
 ```
 
 ### GET /getParameters.php
@@ -72,7 +102,7 @@ Fetch parameters by prefix.
 
 **Example:**
 ```bash
-curl "http://ssm-env.test/api/getParameters.php?prefix=/myapp/prod/"
+curl "http://localhost:8080/api/getParameters.php?prefix=/myapp/prod/"
 ```
 
 ### POST /createParameter.php
@@ -90,7 +120,7 @@ Create a new parameter.
 
 **Example:**
 ```bash
-curl -X POST http://ssm-env.test/api/createParameter.php \
+curl -X POST http://localhost:8080/api/createParameter.php \
   -H "Content-Type: application/json" \
   -d '{"prefix":"/myapp/prod/","name":"test","value":"hello","type":"String"}'
 ```
@@ -109,9 +139,26 @@ Update an existing parameter.
 
 **Example:**
 ```bash
-curl -X PUT http://ssm-env.test/api/updateParameter.php \
+curl -X PUT http://localhost:8080/api/updateParameter.php \
   -H "Content-Type: application/json" \
   -d '{"fullName":"/myapp/prod/test","value":"updated","type":"String"}'
+```
+
+### DELETE /deleteParameter.php
+Delete an existing parameter.
+
+**Request Body:**
+```json
+{
+  "fullName": "/myapp/prod/database_url"
+}
+```
+
+**Example:**
+```bash
+curl -X DELETE http://localhost:8080/api/deleteParameter.php \
+  -H "Content-Type: application/json" \
+  -d '{"fullName":"/myapp/prod/test"}'
 ```
 
 ## Parameter Types

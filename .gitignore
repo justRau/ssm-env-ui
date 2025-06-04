@@ -1,2 +1,19 @@
 /example/
 /vendor/
+
+# Environment files
+.env
+.env.*
+
+# Docker logs
+docker.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
