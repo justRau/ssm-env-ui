@@ -37,7 +37,7 @@
                                  @click.away="showDeletedHistoryPopover = false"
                                  @click.stop
                                  x-transition
-                                 class="absolute top-full left-0 mt-1 w-120 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto cursor-text">
+                                 class="absolute top-full left-0 mt-1 w-120 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[70vh] overflow-y-auto cursor-text">
                                 <div class="p-3 border-b border-gray-200">
                                     <h4 class="font-medium text-gray-900">Deleted Parameters</h4>
                                 </div>
@@ -100,8 +100,23 @@
             </div>
         </div>
 
+        <!-- Full Page Loader -->
+        <div x-show="globalLoading"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg p-6 shadow-xl flex items-center gap-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span class="text-gray-700 font-medium" x-text="loadingMessage"></span>
+            </div>
+        </div>
+
         <!-- Toast Notifications -->
-        <div class="fixed top-4 right-4 z-50 space-y-2">
+        <div class="fixed top-4 right-4 z-40 space-y-2">
             <!-- Error Toast -->
             <div x-show="error"
                  x-transition:enter="transition ease-out duration-300"
@@ -358,9 +373,11 @@
                 showDeletedHistoryPopover: false,
                 showFakeValuesButton: false,
                 fKeyPresses: [],
+                globalLoading: false,
+                loadingMessage: 'Loading...',
 
-                init() {
-                    this.loadFromStorage();
+                async init() {
+                    await this.loadFromStorage();
                     this.loadHistory();
                     this.calculateStorageUsage();
                     this.setupKeyListener();
@@ -387,25 +404,42 @@
                 // localStorage management
                 saveToStorage() {
                     const dataToSave = this.prefixData.map(prefixInfo => ({
-                        prefix: prefixInfo.prefix,
-                        parameters: prefixInfo.parameters.map(param => ({
-                            name: param.name,
-                            fullName: param.fullName,
-                            value: param.value,
-                            type: param.type
-                        }))
+                        prefix: prefixInfo.prefix
+                        // Only save prefix, not parameter values
                     }));
                     localStorage.setItem('ssmPrefixes', JSON.stringify(dataToSave));
                 },
 
-                loadFromStorage() {
+                async loadFromStorage() {
                     const saved = localStorage.getItem('ssmPrefixes');
                     if (saved) {
                         try {
                             const data = JSON.parse(saved);
-                            this.prefixData = data.map(item => ({
-                                prefix: item.prefix,
-                                parameters: item.parameters.map(param => ({
+                            if (data.length > 0) {
+                                this.loadingMessage = 'Loading saved prefixes...';
+                                this.globalLoading = true;
+                                // Load saved prefixes and fetch fresh parameter data
+                                for (const item of data) {
+                                    await this.fetchAndAddPrefix(item.prefix);
+                                }
+                                this.globalLoading = false;
+                            }
+                        } catch (e) {
+                            console.error('Failed to load from storage:', e);
+                            this.globalLoading = false;
+                        }
+                    }
+                },
+
+                async fetchAndAddPrefix(prefix) {
+                    try {
+                        const response = await fetch(`/api/getParameters.php?prefix=${encodeURIComponent(prefix)}`);
+                        const data = await response.json();
+
+                        if (data.success) {
+                            const prefixInfo = {
+                                prefix: prefix,
+                                parameters: data.parameters.map(param => ({
                                     ...param,
                                     editing: false,
                                     editValue: param.value,
@@ -418,10 +452,14 @@
                                     value: '',
                                     type: 'String'
                                 }
-                            }));
-                        } catch (e) {
-                            console.error('Failed to load from storage:', e);
+                            };
+
+                            this.prefixData.push(prefixInfo);
+                        } else {
+                            console.error(`Failed to fetch parameters for prefix ${prefix}:`, data.error);
                         }
+                    } catch (err) {
+                        console.error(`Network error fetching prefix ${prefix}:`, err.message);
                     }
                 },
 
@@ -573,7 +611,7 @@
                     setTimeout(() => this.successMessage = '', 3000);
                 },
 
-                async addPrefix() {
+                                async addPrefix() {
                     if (!this.newPrefix.trim()) {
                         this.error = 'Please enter a prefix';
                         return;
@@ -586,43 +624,24 @@
                     }
 
                     this.loading = true;
+                    this.loadingMessage = 'Fetching parameters...';
+                    this.globalLoading = true;
                     this.error = '';
                     this.successMessage = '';
 
                     try {
-                        const response = await fetch(`/api/getParameters.php?prefix=${encodeURIComponent(this.newPrefix)}`);
-                        const data = await response.json();
+                        await this.fetchAndAddPrefix(this.newPrefix);
+                        this.saveToStorage();
+                        this.newPrefix = '';
 
-                        if (data.success) {
-                            const prefixInfo = {
-                                prefix: this.newPrefix,
-                                parameters: data.parameters.map(param => ({
-                                    ...param,
-                                    editing: false,
-                                    editValue: param.value,
-                                    saving: false
-                                })),
-                                showCreateForm: false,
-                                creating: false,
-                                newParameter: {
-                                    name: '',
-                                    value: '',
-                                    type: 'String'
-                                }
-                            };
-
-                            this.prefixData.push(prefixInfo);
-                            this.saveToStorage();
-                            this.newPrefix = '';
-                            this.successMessage = `Added prefix with ${data.parameters.length} parameters`;
-                            setTimeout(() => this.successMessage = '', 3000);
-                        } else {
-                            this.error = data.error || 'Failed to fetch parameters';
-                        }
+                        const addedPrefix = this.prefixData[this.prefixData.length - 1];
+                        this.successMessage = `Added prefix with ${addedPrefix.parameters.length} parameters`;
+                        setTimeout(() => this.successMessage = '', 3000);
                     } catch (err) {
                         this.error = 'Network error: ' + err.message;
                     } finally {
                         this.loading = false;
+                        this.globalLoading = false;
                     }
                 },
 
@@ -648,6 +667,8 @@
                     }
 
                     prefixInfo.creating = true;
+                    this.loadingMessage = 'Creating parameter...';
+                    this.globalLoading = true;
                     this.error = '';
 
                     try {
@@ -689,6 +710,7 @@
                         this.error = 'Network error: ' + err.message;
                     } finally {
                         prefixInfo.creating = false;
+                        this.globalLoading = false;
                     }
                 },
 
@@ -719,6 +741,8 @@
                     }
 
                     param.saving = true;
+                    this.loadingMessage = 'Updating parameter...';
+                    this.globalLoading = true;
                     this.error = '';
 
                     try {
@@ -754,6 +778,7 @@
                         this.error = 'Network error: ' + err.message;
                     } finally {
                         param.saving = false;
+                        this.globalLoading = false;
                     }
                 },
 
@@ -771,6 +796,8 @@
                     }
 
                     param.saving = true;
+                    this.loadingMessage = 'Deleting parameter...';
+                    this.globalLoading = true;
                     this.error = '';
 
                     try {
@@ -804,6 +831,7 @@
                         this.error = 'Network error: ' + err.message;
                     } finally {
                         param.saving = false;
+                        this.globalLoading = false;
                     }
                 },
 
