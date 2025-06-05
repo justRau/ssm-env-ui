@@ -377,7 +377,7 @@
                 loadingMessage: 'Loading...',
 
                 async init() {
-                    await this.loadFromStorage();
+                    await this.loadFromUrl();
                     this.loadHistory();
                     this.calculateStorageUsage();
                     this.setupKeyListener();
@@ -401,31 +401,35 @@
                     });
                 },
 
-                // localStorage management
-                saveToStorage() {
-                    const dataToSave = this.prefixData.map(prefixInfo => ({
-                        prefix: prefixInfo.prefix
-                        // Only save prefix, not parameter values
-                    }));
-                    localStorage.setItem('ssmPrefixes', JSON.stringify(dataToSave));
+                // URL parameter management
+                saveToUrl() {
+                    const prefixes = this.prefixData.map(prefixInfo => prefixInfo.prefix);
+                    const url = new URL(window.location);
+                    if (prefixes.length > 0) {
+                        url.searchParams.set('prefixes', prefixes.join(','));
+                    } else {
+                        url.searchParams.delete('prefixes');
+                    }
+                    window.history.replaceState({}, '', url);
                 },
 
-                async loadFromStorage() {
-                    const saved = localStorage.getItem('ssmPrefixes');
-                    if (saved) {
+                async loadFromUrl() {
+                    const url = new URL(window.location);
+                    const prefixesParam = url.searchParams.get('prefixes');
+                    if (prefixesParam) {
                         try {
-                            const data = JSON.parse(saved);
-                            if (data.length > 0) {
-                                this.loadingMessage = 'Loading saved prefixes...';
+                            const prefixes = prefixesParam.split(',').filter(p => p.trim());
+                            if (prefixes.length > 0) {
+                                this.loadingMessage = 'Loading prefixes and parameters...';
                                 this.globalLoading = true;
-                                // Load saved prefixes and fetch fresh parameter data
-                                for (const item of data) {
-                                    await this.fetchAndAddPrefix(item.prefix);
+                                // Load prefixes from URL and fetch fresh parameter data
+                                for (const prefix of prefixes) {
+                                    await this.fetchAndAddPrefix(prefix.trim());
                                 }
                                 this.globalLoading = false;
                             }
                         } catch (e) {
-                            console.error('Failed to load from storage:', e);
+                            console.error('Failed to load from URL:', e);
                             this.globalLoading = false;
                         }
                     }
@@ -631,7 +635,7 @@
 
                     try {
                         await this.fetchAndAddPrefix(this.newPrefix);
-                        this.saveToStorage();
+                        this.saveToUrl();
                         this.newPrefix = '';
 
                         const addedPrefix = this.prefixData[this.prefixData.length - 1];
@@ -647,7 +651,7 @@
 
                 removePrefix(prefixIndex) {
                     this.prefixData.splice(prefixIndex, 1);
-                    this.saveToStorage();
+                    this.saveToUrl();
                 },
 
                 toggleCreateForm(prefixIndex) {
@@ -699,7 +703,7 @@
                             prefixInfo.parameters.sort((a, b) => a.name.localeCompare(b.name));
                             prefixInfo.newParameter = { name: '', value: '', type: 'String' };
                             prefixInfo.showCreateForm = false;
-                            this.saveToStorage();
+                            this.saveToUrl();
 
                             this.successMessage = 'Parameter created successfully';
                             setTimeout(() => this.successMessage = '', 3000);
@@ -768,7 +772,7 @@
 
                             param.value = param.editValue;
                             param.editing = false;
-                            this.saveToStorage();
+                            this.saveToUrl();
                             this.successMessage = 'Parameter updated successfully';
                             setTimeout(() => this.successMessage = '', 3000);
                         } else {
@@ -820,7 +824,7 @@
                             // Remove parameter from the local array
                             const prefixInfo = this.prefixData[prefixIndex];
                             prefixInfo.parameters.splice(paramIndex, 1);
-                            this.saveToStorage();
+                            this.saveToUrl();
 
                             this.successMessage = 'Parameter deleted successfully';
                             setTimeout(() => this.successMessage = '', 3000);
@@ -855,7 +859,7 @@
                         this.prefixData.splice(dropIndex, 0, draggedItem);
 
                         // Save the new order
-                        this.saveToStorage();
+                        this.saveToUrl();
                     }
 
                     this.endDrag();
