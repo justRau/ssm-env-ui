@@ -278,11 +278,10 @@
                                                         :class="param.editing ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 hover:bg-gray-200 cursor-pointer'"
                                                         :placeholder="param.editing ? '' : 'Click to edit'"
                                                     >
-                                                    <!-- History Icon - only show when editing -->
+                                                    <!-- History Icon - show on row hover -->
                                                     <button
-                                                        x-show="param.editing"
                                                         @click.stop="showHistoryPopover = showHistoryPopover === param.fullName ? null : param.fullName"
-                                                        class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                        class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-all opacity-0 group-hover:opacity-100"
                                                         :class="getParameterHistory(param.fullName).length > 0 ? 'text-blue-500 hover:text-blue-700' : ''"
                                                     >
                                                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
