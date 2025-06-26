@@ -316,11 +316,13 @@
                                                         :class="param.editing ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 hover:bg-gray-200 cursor-pointer'"
                                                         :placeholder="param.editing ? '' : 'Click to edit'"
                                                     >
-                                                    <!-- History Icon - show on row hover -->
+                                                    <!-- History Icon - show always if has history, otherwise on hover -->
                                                     <button
                                                         @click.stop="showHistoryPopover = showHistoryPopover === param.fullName ? null : param.fullName"
-                                                        class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-all opacity-0 group-hover:opacity-100"
-                                                        :class="getParameterHistory(param.fullName).length > 0 ? 'text-blue-500 hover:text-blue-700' : ''"
+                                                        class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-all"
+                                                        :class="[
+                                                            getParameterHistory(param.fullName).length > 0 ? 'text-blue-500 hover:text-blue-700 opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                                        ]"
                                                     >
                                                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
@@ -416,10 +418,17 @@
                 loadingMessage: 'Loading...',
 
                 async init() {
+                    console.log('🔵 SSM Editor: Initializing...');
+                    console.log('🔵 localStorage at init:', {
+                        ssmHistory: localStorage.getItem('ssmHistory'),
+                        ssmDeletedHistory: localStorage.getItem('ssmDeletedHistory'),
+                        ssmPrefixHistory: localStorage.getItem('ssmPrefixHistory')
+                    });
                     await this.loadFromUrl();
                     this.loadHistory();
                     this.calculateStorageUsage();
                     this.setupKeyListener();
+                    console.log('🔵 SSM Editor: Initialization complete');
                 },
 
                 setupKeyListener() {
@@ -438,6 +447,39 @@
                             }
                         }
                     });
+
+                    // Add debugging for page events that might clear localStorage
+                    window.addEventListener('beforeunload', () => {
+                        console.log('🔄 Page beforeunload - localStorage check:', {
+                            ssmHistory: localStorage.getItem('ssmHistory') ? 'exists' : 'missing',
+                            ssmDeletedHistory: localStorage.getItem('ssmDeletedHistory') ? 'exists' : 'missing',
+                            ssmPrefixHistory: localStorage.getItem('ssmPrefixHistory') ? 'exists' : 'missing'
+                        });
+                    });
+
+                    window.addEventListener('unload', () => {
+                        console.log('🔄 Page unload - localStorage check:', {
+                            ssmHistory: localStorage.getItem('ssmHistory') ? 'exists' : 'missing',
+                            ssmDeletedHistory: localStorage.getItem('ssmDeletedHistory') ? 'exists' : 'missing',
+                            ssmPrefixHistory: localStorage.getItem('ssmPrefixHistory') ? 'exists' : 'missing'
+                        });
+                    });
+
+                    // Check if localStorage gets cleared
+                    let storageCheck = setInterval(() => {
+                        const currentStorage = {
+                            ssmHistory: localStorage.getItem('ssmHistory'),
+                            ssmDeletedHistory: localStorage.getItem('ssmDeletedHistory'),
+                            ssmPrefixHistory: localStorage.getItem('ssmPrefixHistory')
+                        };
+
+                        if (!currentStorage.ssmHistory && this.history.length > 0) {
+                            console.error('🚨 STORAGE CLEARED! History was lost:', {
+                                inMemoryHistory: this.history.length,
+                                localStorage: currentStorage
+                            });
+                        }
+                    }, 5000); // Check every 5 seconds
                 },
 
                 // URL parameter management
@@ -453,28 +495,44 @@
                 },
 
                 async loadFromUrl() {
+                    console.log('🌐 Loading from URL...');
+                    console.log('🌐 localStorage before URL load:', {
+                        ssmHistory: localStorage.getItem('ssmHistory') ? 'exists' : 'missing',
+                        ssmDeletedHistory: localStorage.getItem('ssmDeletedHistory') ? 'exists' : 'missing',
+                        ssmPrefixHistory: localStorage.getItem('ssmPrefixHistory') ? 'exists' : 'missing'
+                    });
+
                     const url = new URL(window.location);
                     const prefixesParam = url.searchParams.get('prefixes');
+                    console.log('🌐 URL prefixes param:', prefixesParam);
+
                     if (prefixesParam) {
                         try {
                             const prefixes = prefixesParam.split(',').filter(p => p.trim());
+                            console.log('🌐 Loading prefixes from URL:', prefixes);
                             if (prefixes.length > 0) {
                                 this.loadingMessage = 'Loading prefixes and parameters...';
                                 this.globalLoading = true;
-                                // Load prefixes from URL and fetch fresh parameter data
+                                // Load prefixes from URL and fetch fresh parameter data (don't save to history)
                                 for (const prefix of prefixes) {
-                                    await this.fetchAndAddPrefix(prefix.trim());
+                                    await this.fetchAndAddPrefix(prefix.trim(), false);
                                 }
                                 this.globalLoading = false;
                             }
                         } catch (e) {
-                            console.error('Failed to load from URL:', e);
+                            console.error('❌ Failed to load from URL:', e);
                             this.globalLoading = false;
                         }
                     }
+
+                    console.log('🌐 localStorage after URL load:', {
+                        ssmHistory: localStorage.getItem('ssmHistory') ? 'exists' : 'missing',
+                        ssmDeletedHistory: localStorage.getItem('ssmDeletedHistory') ? 'exists' : 'missing',
+                        ssmPrefixHistory: localStorage.getItem('ssmPrefixHistory') ? 'exists' : 'missing'
+                    });
                 },
 
-                async fetchAndAddPrefix(prefix) {
+                async fetchAndAddPrefix(prefix, saveToHistory = true) {
                     try {
                         const response = await fetch(`/api/getParameters.php?prefix=${encodeURIComponent(prefix)}`);
                         const data = await response.json();
@@ -499,8 +557,13 @@
 
                             this.prefixData.push(prefixInfo);
 
-                            // Add to prefix history
-                            this.addToPrefixHistory(prefix, data.parameters.length);
+                            // Only add to prefix history if explicitly requested (manual add, not URL load)
+                            if (saveToHistory) {
+                                console.log('📋 Adding prefix to history (manual add):', prefix);
+                                this.addToPrefixHistory(prefix, data.parameters.length);
+                            } else {
+                                console.log('📋 Skipping prefix history (loaded from URL):', prefix);
+                            }
                         } else {
                             console.error(`Failed to fetch parameters for prefix ${prefix}:`, data.error);
                         }
@@ -510,46 +573,93 @@
                 },
 
                 loadHistory() {
+                    console.log('🟡 Loading history from localStorage...');
                     const history = localStorage.getItem('ssmHistory');
                     const deletedHistory = localStorage.getItem('ssmDeletedHistory');
                     const prefixHistory = localStorage.getItem('ssmPrefixHistory');
 
+                    console.log('🟡 Raw localStorage values:', {
+                        history: history,
+                        deletedHistory: deletedHistory,
+                        prefixHistory: prefixHistory
+                    });
+
                     if (history) {
                         try {
                             this.history = JSON.parse(history);
+                            console.log('🟢 Successfully loaded history:', this.history.length, 'items');
                         } catch (e) {
-                            console.error('Failed to load history:', e);
+                            console.error('❌ Failed to load history:', e);
                             this.history = [];
                         }
+                    } else {
+                        console.log('🟡 No history found in localStorage');
+                        this.history = [];
                     }
 
                     if (deletedHistory) {
                         try {
                             this.deletedHistory = JSON.parse(deletedHistory);
+                            console.log('🟢 Successfully loaded deleted history:', this.deletedHistory.length, 'items');
                         } catch (e) {
-                            console.error('Failed to load deleted history:', e);
+                            console.error('❌ Failed to load deleted history:', e);
                             this.deletedHistory = [];
                         }
+                    } else {
+                        console.log('🟡 No deleted history found in localStorage');
+                        this.deletedHistory = [];
                     }
 
                     if (prefixHistory) {
                         try {
                             this.prefixHistory = JSON.parse(prefixHistory);
+                            console.log('🟢 Successfully loaded prefix history:', this.prefixHistory.length, 'items');
                         } catch (e) {
-                            console.error('Failed to load prefix history:', e);
+                            console.error('❌ Failed to load prefix history:', e);
                             this.prefixHistory = [];
                         }
+                    } else {
+                        console.log('🟡 No prefix history found in localStorage');
+                        this.prefixHistory = [];
                     }
                 },
 
-                saveHistory() {
-                    localStorage.setItem('ssmHistory', JSON.stringify(this.history));
-                    localStorage.setItem('ssmDeletedHistory', JSON.stringify(this.deletedHistory));
-                    localStorage.setItem('ssmPrefixHistory', JSON.stringify(this.prefixHistory));
+                                saveHistory(keys = ['ssmHistory', 'ssmDeletedHistory', 'ssmPrefixHistory']) {
+                    console.log('💾 Saving specific history keys to localStorage:', keys, {
+                        history: this.history.length,
+                        deletedHistory: this.deletedHistory.length,
+                        prefixHistory: this.prefixHistory.length
+                    });
+
+                    try {
+                        if (keys.includes('ssmHistory')) {
+                            localStorage.setItem('ssmHistory', JSON.stringify(this.history));
+                            console.log('✅ Saved ssmHistory:', this.history.length, 'items');
+                        }
+                        if (keys.includes('ssmDeletedHistory')) {
+                            localStorage.setItem('ssmDeletedHistory', JSON.stringify(this.deletedHistory));
+                            console.log('✅ Saved ssmDeletedHistory:', this.deletedHistory.length, 'items');
+                        }
+                        if (keys.includes('ssmPrefixHistory')) {
+                            localStorage.setItem('ssmPrefixHistory', JSON.stringify(this.prefixHistory));
+                            console.log('✅ Saved ssmPrefixHistory:', this.prefixHistory.length, 'items');
+                        }
+                    } catch (e) {
+                        console.error('❌ Failed to save history to localStorage:', e);
+                    }
+
                     this.calculateStorageUsage();
                 },
 
-                addToHistory(fullName, oldValue, newValue, type) {
+                                addToHistory(fullName, oldValue, newValue, type) {
+                    console.log('📝 Adding to history:', {
+                        fullName,
+                        oldValue,
+                        newValue,
+                        type,
+                        currentHistoryLength: this.history.length
+                    });
+
                     this.history.push({
                         fullName,
                         oldValue,
@@ -557,7 +667,9 @@
                         type,
                         timestamp: new Date().toISOString()
                     });
-                    this.saveHistory();
+
+                    console.log('📝 History after adding:', this.history.length, 'items');
+                    this.saveHistory(['ssmHistory']); // Only save parameter history
                 },
 
                 addToDeletedHistory(fullName, value, type) {
@@ -567,7 +679,7 @@
                         type,
                         timestamp: new Date().toISOString()
                     });
-                    this.saveHistory();
+                    this.saveHistory(['ssmDeletedHistory']); // Only save deleted history
                 },
 
                 addToPrefixHistory(prefix, parameterCount) {
@@ -595,7 +707,7 @@
                         this.prefixHistory = this.prefixHistory.slice(-20);
                     }
 
-                    this.saveHistory();
+                    this.saveHistory(['ssmPrefixHistory']); // Only save prefix history
                 },
 
                 selectPrefixFromHistory(prefix) {
