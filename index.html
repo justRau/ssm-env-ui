@@ -79,14 +79,52 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
-                    <div class="flex-1 min-w-80">
+                    <div class="flex-1 min-w-80 relative">
                         <input
                             type="text"
                             x-model="newPrefix"
                             @keyup.enter="addPrefix()"
                             placeholder="/myapp/prod/"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
+                        <!-- Prefix History Icon -->
+                        <button
+                            @click.stop="showPrefixHistoryPopover = !showPrefixHistoryPopover"
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-all"
+                            :class="prefixHistory.length > 0 ? 'text-blue-500 hover:text-blue-700' : ''"
+                        >
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+
+                        <!-- Prefix History Popover -->
+                        <div x-show="showPrefixHistoryPopover"
+                             @click.away="showPrefixHistoryPopover = false"
+                             @click.stop
+                             x-transition
+                             class="absolute top-full right-0 mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                            <div class="p-3 border-b border-gray-200">
+                                <h4 class="font-medium text-gray-900">Recently Added Prefixes</h4>
+                            </div>
+                            <div class="p-2">
+                                <template x-for="historyItem in prefixHistory.slice().reverse()" :key="historyItem.timestamp">
+                                    <div class="p-2 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 cursor-pointer"
+                                         @click="selectPrefixFromHistory(historyItem.prefix)">
+                                        <div class="flex justify-between items-center">
+                                            <div class="font-mono text-sm text-gray-900 select-text" x-text="historyItem.prefix"></div>
+                                            <div class="text-xs text-gray-500 select-text" x-text="formatTimestamp(historyItem.timestamp)"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-600 mt-1">
+                                            <span x-text="historyItem.parameterCount"></span> parameters found
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="prefixHistory.length === 0" class="p-4 text-center text-gray-500 text-sm">
+                                    No prefix history
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <button
                         @click="addPrefix()"
@@ -367,9 +405,11 @@
                 },
                 history: [],
                 deletedHistory: [],
+                prefixHistory: [],
                 storageUsage: '0 KB',
                 showHistoryPopover: null,
                 showDeletedHistoryPopover: false,
+                showPrefixHistoryPopover: false,
                 showFakeValuesButton: false,
                 fKeyPresses: [],
                 globalLoading: false,
@@ -458,6 +498,9 @@
                             };
 
                             this.prefixData.push(prefixInfo);
+
+                            // Add to prefix history
+                            this.addToPrefixHistory(prefix, data.parameters.length);
                         } else {
                             console.error(`Failed to fetch parameters for prefix ${prefix}:`, data.error);
                         }
@@ -469,6 +512,7 @@
                 loadHistory() {
                     const history = localStorage.getItem('ssmHistory');
                     const deletedHistory = localStorage.getItem('ssmDeletedHistory');
+                    const prefixHistory = localStorage.getItem('ssmPrefixHistory');
 
                     if (history) {
                         try {
@@ -487,11 +531,21 @@
                             this.deletedHistory = [];
                         }
                     }
+
+                    if (prefixHistory) {
+                        try {
+                            this.prefixHistory = JSON.parse(prefixHistory);
+                        } catch (e) {
+                            console.error('Failed to load prefix history:', e);
+                            this.prefixHistory = [];
+                        }
+                    }
                 },
 
                 saveHistory() {
                     localStorage.setItem('ssmHistory', JSON.stringify(this.history));
                     localStorage.setItem('ssmDeletedHistory', JSON.stringify(this.deletedHistory));
+                    localStorage.setItem('ssmPrefixHistory', JSON.stringify(this.prefixHistory));
                     this.calculateStorageUsage();
                 },
 
@@ -514,6 +568,39 @@
                         timestamp: new Date().toISOString()
                     });
                     this.saveHistory();
+                },
+
+                addToPrefixHistory(prefix, parameterCount) {
+                    // Check if prefix already exists in history
+                    const existingIndex = this.prefixHistory.findIndex(h => h.prefix === prefix);
+
+                    if (existingIndex !== -1) {
+                        // Update existing entry with new timestamp and parameter count
+                        this.prefixHistory[existingIndex] = {
+                            prefix,
+                            parameterCount,
+                            timestamp: new Date().toISOString()
+                        };
+                    } else {
+                        // Add new entry
+                        this.prefixHistory.push({
+                            prefix,
+                            parameterCount,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                    // Keep only the last 20 entries
+                    if (this.prefixHistory.length > 20) {
+                        this.prefixHistory = this.prefixHistory.slice(-20);
+                    }
+
+                    this.saveHistory();
+                },
+
+                selectPrefixFromHistory(prefix) {
+                    this.newPrefix = prefix;
+                    this.showPrefixHistoryPopover = false;
                 },
 
                 getParameterHistory(fullName) {
